@@ -1,3 +1,7 @@
+inline Real f(Real f90, Vector3 omega, Vector3 n) {
+    return (1 + (f90 - 1) * pow(1 - abs(dot(n, omega)), 5));
+}
+
 Spectrum eval_op::operator()(const DisneyDiffuse &bsdf) const {
     if (dot(vertex.geometric_normal, dir_in) < 0 ||
             dot(vertex.geometric_normal, dir_out) < 0) {
@@ -11,7 +15,21 @@ Spectrum eval_op::operator()(const DisneyDiffuse &bsdf) const {
     }
 
     // Homework 1: implement this!
-    return make_zero_spectrum();
+    Spectrum result = make_zero_spectrum();
+    Vector3 h = dir_in + dir_out;
+    h = normalize(h); // half vector
+    Real half_out = dot(h, dir_out);
+    Real fss90 = eval(bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool) * (half_out * half_out);
+    Real fd90 = 0.5 + 2 * fss90;
+    Spectrum base_color = eval(bsdf.base_color, vertex.uv, vertex.uv_screen_size, texture_pool);
+    Spectrum base_diffuse = base_color * c_INVPI * f(fd90, dir_in, frame.n) * f(fd90, dir_out, frame.n) * abs(dot(frame.n, dir_out));
+    result = base_diffuse;
+
+    // handle subsurface scattering
+    Spectrum subsurface = 1.25 * base_color * c_INVPI * (f(fss90, dir_in, frame.n) * f(fss90, dir_out, frame.n) * (1.0 / (abs(dot(frame.n, dir_in)) + abs(dot(frame.n, dir_out))) - 0.5) + 0.5) * abs(dot(frame.n, dir_out));
+    Real ss = eval(bsdf.subsurface, vertex.uv, vertex.uv_screen_size, texture_pool);
+    result = (1.0 - ss) * base_diffuse + ss * subsurface;
+    return result;
 }
 
 Real pdf_sample_bsdf_op::operator()(const DisneyDiffuse &bsdf) const {
@@ -27,7 +45,8 @@ Real pdf_sample_bsdf_op::operator()(const DisneyDiffuse &bsdf) const {
     }
     
     // Homework 1: implement this!
-    return Real(0);
+    // importance sample the cosine hemisphere domain.
+    return fmax(dot(frame.n, dir_out), Real(0)) * c_INVPI;
 }
 
 std::optional<BSDFSampleRecord> sample_bsdf_op::operator()(const DisneyDiffuse &bsdf) const {
@@ -42,7 +61,11 @@ std::optional<BSDFSampleRecord> sample_bsdf_op::operator()(const DisneyDiffuse &
     }
     
     // Homework 1: implement this!
-    return {};
+    return BSDFSampleRecord{
+        to_world(frame, sample_cos_hemisphere(rnd_param_uv)),
+        Real(0),
+        eval(bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool)
+    };
 }
 
 TextureSpectrum get_texture_op::operator()(const DisneyDiffuse &bsdf) const {

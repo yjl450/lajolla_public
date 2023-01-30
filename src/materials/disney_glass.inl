@@ -45,8 +45,8 @@ Spectrum eval_op::operator()(const DisneyGlass& bsdf) const {
     Real g_in = 1.0 / (1.0 + lambda_in);
     Real g_out = 1.0 / (1.0 + lambda_out);
     Real gg = g_in * g_out;
-    Real fg = fresnel_dielectric(h_dot_in, eta);
-    if (n_dot_in * n_dot_out > 0) {
+    Real fg = fresnel_dielectric(abs(h_dot_in), abs(h_dot_out), eta);
+    if (reflect) {
         return base_color * fg * dg * gg / (4.0 * abs(n_dot_in));
     }
     else {
@@ -87,7 +87,8 @@ Real pdf_sample_bsdf_op::operator()(const DisneyGlass& bsdf) const {
     // whether to sample reflection or refraction
     // so PDF ~ F * D * G_in for reflection, PDF ~ (1 - F) * D * G_in for refraction.
     Real h_dot_in = dot(half_vector, dir_in);
-    Real F = fresnel_dielectric(h_dot_in, eta);    
+    Real h_dot_out = dot(half_vector, dir_out);
+    Real F = fresnel_dielectric(abs(h_dot_in), abs(h_dot_out), eta);
     constexpr Real alpha_min = 0.0001;
     Real aspect = sqrt(1.0 - 0.9 * eval(bsdf.anisotropic, vertex.uv, vertex.uv_screen_size, texture_pool));
     Real alpha_x = max(alpha_min, roughness * roughness / aspect);

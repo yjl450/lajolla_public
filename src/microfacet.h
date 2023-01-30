@@ -112,3 +112,22 @@ inline Vector3 sample_visible_normals(const Vector3 &local_dir_in, Real alpha, c
     // Transforming the normal back to the ellipsoid configuration
     return normalize(Vector3{alpha * hemi_N.x, alpha * hemi_N.y, max(Real(0), hemi_N.z)});
 }
+
+inline Vector3 sample_visible_normals_anisotropic(const Vector3& local_dir_in, Real alpha_x, Real alpha_y, const Vector2& rnd_param) {
+    if (local_dir_in.z < 0) {
+        return -sample_visible_normals_anisotropic(-local_dir_in, alpha_x, alpha_y, rnd_param);
+    }
+    Vector3 hemi_dir_in = normalize(
+        Vector3{ alpha_x * local_dir_in.x, alpha_y * local_dir_in.y, local_dir_in.z });
+
+    Real r = sqrt(rnd_param.x);
+    Real phi = 2 * c_PI * rnd_param.y;
+    Real t1 = r * cos(phi);
+    Real t2 = r * sin(phi);
+    Real s = (1 + hemi_dir_in.z) / 2;
+    t2 = (1 - s) * sqrt(1 - t1 * t1) + s * t2;
+    Vector3 disk_N{ t1, t2, sqrt(max(Real(0), 1 - t1 * t1 - t2 * t2)) };
+    Frame hemi_frame(hemi_dir_in);
+    Vector3 hemi_N = to_world(hemi_frame, disk_N);
+    return normalize(Vector3{ alpha_x * hemi_N.x, alpha_y * hemi_N.y, max(Real(0), hemi_N.z) });
+}

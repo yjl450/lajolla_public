@@ -120,13 +120,9 @@ sample_bsdf_op::operator()(const DisneyGlass& bsdf) const {
     // Homework 1: implement this!
     Real eta = dot(vertex.geometric_normal, dir_in) > 0 ? bsdf.eta : 1 / bsdf.eta;
     assert(eta > 0);
-
     Real roughness = eval(
         bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool);
-    // Clamp roughness to avoid numerical issues.
     roughness = std::clamp(roughness, Real(0.01), Real(1));
-    // Sample a micro normal and transform it to world space -- this is our half-vector.
-    //Real alpha = roughness * roughness;
     Vector3 local_dir_in = to_local(frame, dir_in);
     constexpr Real alpha_min = 0.0001;
     Real aspect = sqrt(1.0 - 0.9 * eval(bsdf.anisotropic, vertex.uv, vertex.uv_screen_size, texture_pool));
@@ -136,33 +132,21 @@ sample_bsdf_op::operator()(const DisneyGlass& bsdf) const {
         sample_visible_normals_anisotropic(local_dir_in, alpha_x, alpha_y, rnd_param_uv);
 
     Vector3 half_vector = to_world(frame, local_micro_normal);
-    // Flip half-vector if it's below surface
     if (dot(half_vector, frame.n) < 0) {
         half_vector = -half_vector;
     }
-
-    // Now we need to decide whether to reflect or refract.
-    // We do this using the Fresnel term.
     Real h_dot_in = dot(half_vector, dir_in);
     Real F = fresnel_dielectric(h_dot_in, eta);
 
     if (rnd_param_w <= F) {
-        // Reflection
         Vector3 reflected = normalize(-dir_in + 2 * dot(dir_in, half_vector) * half_vector);
-        // set eta to 0 since we are not transmitting
         return BSDFSampleRecord{ reflected, Real(0) /* eta */, roughness };
     }
     else {
-        // Refraction
-        // https://en.wikipedia.org/wiki/Snell%27s_law#Vector_form
-        // (note that our eta is eta2 / eta1, and l = -dir_in)
         Real h_dot_out_sq = 1 - (1 - h_dot_in * h_dot_in) / (eta * eta);
         if (h_dot_out_sq <= 0) {
-            // Total internal reflection
-            // This shouldn't really happen, as F will be 1 in this case.
             return {};
         }
-        // flip half_vector if needed
         if (h_dot_in < 0) {
             half_vector = -half_vector;
         }

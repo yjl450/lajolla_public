@@ -103,23 +103,8 @@ Spectrum eval_op::operator()(const DisneyBSDF& bsdf) const {
 
 #ifdef GLASS
     Spectrum f_glass;
-    eta = dot(vertex.geometric_normal, dir_in) > 0 ? eta : 1 / eta;
-    assert(eta > 0);
-    if (!reflect) {
-        h = normalize(dir_in + dir_out * eta);
-    }
-    if (dot(h, frame.n) < 0) {
-        h = -h;
-    }
-    Real dg = 1.0 / (c_PI * alpha_x * alpha_y * pow(pow(hl.x / alpha_x, 2) + pow(hl.y / alpha_y, 2) + hl.z * hl.z, 2));
-    Real gg = g_in * g_out;
-    Real fg = fresnel_dielectric(abs(h_dot_in), abs(h_dot_out), eta);
-    if (reflect) {
-        f_glass = base_color * fg * dg * gg / (4.0 * abs(n_dot_in));
-    }
-    else {
-        f_glass = sqrt(base_color) * (1.0 - fg) * dg * gg * abs(h_dot_out * h_dot_in) / (abs(n_dot_in) * pow(h_dot_in + eta * h_dot_out, 2));
-    }
+    struct DisneyGlass glass = { bsdf.base_color, bsdf.roughness, bsdf.anisotropic, bsdf.eta };
+    f_glass = eval_op{ dir_in, dir_out,vertex,texture_pool,dir }(glass);
     f_disney += (1 - metallic) * specular_transmission * f_glass;
 #endif // GLASS
 
@@ -147,7 +132,6 @@ Real pdf_sample_bsdf_op::operator()(const DisneyBSDF& bsdf) const {
     struct DisneyGlass glass { bsdf.base_color, bsdf.roughness, bsdf.anisotropic, bsdf.eta };
     Real pdf_glass = pdf_sample_bsdf(glass, dir_in, dir_out, vertex, texture_pool);
     if (dot(vertex.geometric_normal, dir_in) <= 0) {
-        return 0;
         return pdf_glass;
     }
 
@@ -158,8 +142,8 @@ Real pdf_sample_bsdf_op::operator()(const DisneyBSDF& bsdf) const {
     Real pdf_metal = pdf_sample_bsdf(metal, dir_in, dir_out, vertex, texture_pool);
     Real pdf_diffuse = pdf_sample_bsdf(diffuse, dir_in, dir_out, vertex, texture_pool);
     Real pdf_clearcoat = pdf_sample_bsdf(m_clearcoat, dir_in, dir_out, vertex, texture_pool);
-    Real pdf = w_metal * pdf_metal + w_diffuse * pdf_diffuse + w_clearcoat * pdf_clearcoat;// +w_glass * pdf_glass;
-    return pdf / (w_metal + w_diffuse + w_clearcoat);
+    Real pdf = w_metal * pdf_metal + w_diffuse * pdf_diffuse + w_clearcoat * pdf_clearcoat +w_glass * pdf_glass;
+    return pdf / (w_metal + w_diffuse + w_clearcoat+w_glass);
 }
 
 std::optional<BSDFSampleRecord>
@@ -172,8 +156,7 @@ sample_bsdf_op::operator()(const DisneyBSDF& bsdf) const {
     // Homework 1: implement this!
     struct DisneyGlass glass { bsdf.base_color, bsdf.roughness, bsdf.anisotropic, bsdf.eta };
     if (dot(vertex.geometric_normal, dir_in) <= 0) {
-        //return sample_bsdf(glass, dir_in, vertex, texture_pool, rnd_param_uv, rnd_param_w);
-        return {};
+        return sample_bsdf(glass, dir_in, vertex, texture_pool, rnd_param_uv, rnd_param_w);
     }
 
     std::optional<BSDFSampleRecord> record;
@@ -199,9 +182,9 @@ sample_bsdf_op::operator()(const DisneyBSDF& bsdf) const {
     else if (choice > w_diffuse + w_metal && choice <= w_diffuse + w_metal + w_clearcoat) {
         record = sample_bsdf(m_clearcoat, dir_in, vertex, texture_pool, rnd_param_uv, rnd_param_w);
     }
-    //else if (choice > w_diffuse + w_metal + w_clearcoat && choice <= w_diffuse + w_metal + w_clearcoat + w_glass) {
-    //    record = sample_bsdf(glass, dir_in, vertex, texture_pool, rnd_param_uv, rnd_param_w);
-    //}
+    else if (choice > w_diffuse + w_metal + w_clearcoat ) {
+        record = sample_bsdf(glass, dir_in, vertex, texture_pool, rnd_param_uv, rnd_param_w);
+    }
     return record;
 }
 

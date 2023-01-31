@@ -26,8 +26,8 @@ Spectrum eval_op::operator()(const DisneyMetal& bsdf) const {
     Real dm = 1.0 / (c_PI * alpha_x * alpha_y * pow(pow(hl.x / alpha_x, 2) + pow(hl.y / alpha_y, 2) + hl.z * hl.z, 2));
     Vector3 local_in = to_local(frame, dir_in);
     Vector3 local_out = to_local(frame, dir_out);
-    Real lambda_in = sqrt(1.0 + (pow(local_in.x * alpha_x, 2) + pow(local_in.y * alpha_y, 2)) / (local_in.z * local_in.z)) / 2.0 - 0.5;
-    Real lambda_out = sqrt(1.0 + (pow(local_out.x * alpha_x, 2) + pow(local_out.y * alpha_y, 2)) / (local_out.z * local_out.z)) / 2.0 - 0.5;
+    Real lambda_in = lambda(dir_in, frame, alpha_x, alpha_y);
+    Real lambda_out = lambda(dir_out, frame, alpha_x, alpha_y);
     Real g_in = 1.0 / (1.0 + lambda_in);
     Real g_out = 1.0 / (1.0 + lambda_out);
     Real gm = g_in * g_out;
@@ -57,7 +57,7 @@ Real pdf_sample_bsdf_op::operator()(const DisneyMetal& bsdf) const {
     Real alpha_y = max(alpha_min, roughness * roughness * aspect);
     Vector3 hl = to_local(frame, half_vector);
     Vector3 local_in = to_local(frame, dir_in);
-    Real lambda_in = sqrt(1.0 + (pow(local_in.x * alpha_x, 2) + pow(local_in.y * alpha_y, 2)) / (local_in.z * local_in.z)) / 2.0 - 0.5;
+    Real lambda_in = lambda(dir_in, frame, alpha_x, alpha_y);
     Real G = 1.0 / (1.0 + lambda_in);
     Real D = 1.0 / (c_PI * alpha_x * alpha_y * pow(pow(hl.x / alpha_x, 2) + pow(hl.y / alpha_y, 2) + hl.z * hl.z, 2));
     return (G * D) / (4.0 * n_dot_in);

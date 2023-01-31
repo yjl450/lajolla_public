@@ -131,3 +131,9 @@ inline Vector3 sample_visible_normals_anisotropic(const Vector3& local_dir_in, R
     Vector3 hemi_N = to_world(hemi_frame, disk_N);
     return normalize(Vector3{ alpha_x * hemi_N.x, alpha_y * hemi_N.y, max(Real(0), hemi_N.z) });
 }
+
+inline Real lambda(Vector3 w, Frame frame, Real alpha_x, Real alpha_y) {
+    Vector3 wl = to_local(frame, w);
+    Real internal = (pow(wl.x * alpha_x, 2) + pow(wl.y * alpha_y, 2)) / pow(wl.z, 2);
+    return sqrt(1.0 + internal) / 2.0 - 0.5;
+}

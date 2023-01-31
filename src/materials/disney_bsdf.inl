@@ -31,82 +31,78 @@ Spectrum eval_op::operator()(const DisneyBSDF& bsdf) const {
     Real clearcoat_gloss = eval(bsdf.clearcoat_gloss, vertex.uv, vertex.uv_screen_size, texture_pool);
     Real eta = bsdf.eta;
 
-    // Derived parameters 
-    constexpr Real alpha_min = 0.0001;
-    Spectrum c_tint = luminance(base_color) > 0 ? base_color / luminance(base_color) : make_const_spectrum(1.0);
-    Real aspect = sqrt(1.0 - 0.9 * anisotropic);
-    Real alpha_x, alpha_y;
-    alpha_x = max(alpha_min, roughness * roughness / aspect);
-    alpha_y = max(alpha_min, roughness * roughness * aspect);
-    Real lambda_in = lambda(dir_in, frame, alpha_x, alpha_y);
-    Real lambda_out = lambda(dir_out, frame, alpha_x, alpha_y);
-    Real g_in = 1.0 / (1.0 + lambda_in);
-    Real g_out = 1.0 / (1.0 + lambda_out);
-
-    // Precompute normal product
-    Vector3 h = normalize(dir_in + dir_out);
-    Real h_dot_in = abs(dot(h, dir_in));
-    Real h_dot_out = abs(dot(h, dir_out));
-    Real n_dot_in = abs(dot(frame.n, dir_in));
-    Real n_dot_out = abs(dot(frame.n, dir_out));
+    Spectrum f_diffuse = make_zero_spectrum();
+    Spectrum f_sheen = make_zero_spectrum();
+    Spectrum f_glass = make_zero_spectrum();
+    Spectrum f_clearcoat = make_zero_spectrum();
+    Spectrum f_metal = make_zero_spectrum();
     Spectrum f_disney = make_zero_spectrum();
-    Vector3 hl = to_local(frame, h);
 
 #ifdef DIFFUSE
     // Diffuse component
-    if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_in, vertex.geometric_normal) >= 0)
+    if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_out, vertex.geometric_normal) >= 0)
     {
-        Real fss90 = roughness * (h_dot_out * h_dot_out);
-        Real fd90 = 0.5 + 2 * fss90;
-        Spectrum base_diffuse = base_color * c_INVPI * fss(fd90, dir_in, frame.n) * fss(fd90, dir_out, frame.n) * n_dot_out;
-        Spectrum diffuse_subsurface = 1.25 * base_color * c_INVPI * (fss(fss90, dir_in, frame.n) * fss(fss90, dir_out, frame.n) * (1.0 / (n_dot_in + n_dot_out) - 0.5) + 0.5) * n_dot_out;
-        Spectrum f_diffuse = (1.0 - subsurface) * base_diffuse + subsurface * diffuse_subsurface;
-        f_disney += (1 - specular_transmission) * (1 - metallic) * f_diffuse;
+        struct DisneyDiffuse diff = { bsdf.base_color, bsdf.roughness, bsdf.subsurface };
+        f_diffuse = eval_op{ dir_in, dir_out,vertex,texture_pool,dir }(diff);
     }
 #endif // DIFFUSE
 
 #ifdef SHEEN
-    if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_in, vertex.geometric_normal) >= 0)
+    if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_out, vertex.geometric_normal) >= 0)
     {
-        Spectrum c_sheen = (1.0 - sheen_tint) + sheen_tint * c_tint;
-        Spectrum f_sheen = c_sheen * pow(1.0 - h_dot_out, 5) * n_dot_out;
-        f_disney += (1 - metallic) * sheen * f_sheen;
+        struct DisneySheen she = { bsdf.base_color, bsdf.sheen_tint };
+        f_sheen = eval_op{ dir_in, dir_out,vertex,texture_pool,dir }(she);
+
     }
 #endif // SHEEN
 
 #ifdef METAL
-    if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_in, vertex.geometric_normal) >= 0)
+    if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_out, vertex.geometric_normal) >= 0)
     {
+        Spectrum c_tint = luminance(base_color) > 0 ? base_color / luminance(base_color) : make_const_spectrum(1.0);
+        Vector3 h = normalize(dir_in + dir_out);
+        Real h_dot_out = abs(dot(h, dir_out));
+        Real n_dot_in = abs(dot(frame.n, dir_in));
+        Vector3 hl = to_local(frame, h);
         Spectrum ks = (1 - specular_tint) + specular_tint * c_tint;
         Real r0_m = pow(eta - 1.0, 2) / pow(eta + 1.0, 2);
         Spectrum c0 = specular * r0_m * (1 - metallic) * ks + metallic * base_color;
         Spectrum fm = c0 + (1.0 - c0) * pow(1.0 - h_dot_out, 5);
+        Real aspect = sqrt(1.0 - 0.9 * anisotropic);
+        Real alpha_x, alpha_y;
+        constexpr Real alpha_min = 0.0001;
+        alpha_x = max(alpha_min, roughness * roughness / aspect);
+        alpha_y = max(alpha_min, roughness * roughness * aspect);
         Real dm = 1.0 / (c_PI * alpha_x * alpha_y * pow(pow(hl.x / alpha_x, 2) + pow(hl.y / alpha_y, 2) + hl.z * hl.z, 2));
+        Vector3 local_in = to_local(frame, dir_in);
+        Vector3 local_out = to_local(frame, dir_out);
+        Real lambda_in = lambda(dir_in, frame, alpha_x, alpha_y);
+        Real lambda_out = lambda(dir_out, frame, alpha_x, alpha_y);
+        Real g_in = 1.0 / (1.0 + lambda_in);
+        Real g_out = 1.0 / (1.0 + lambda_out);
         Real gm = g_in * g_out;
-        Spectrum f_metal = fm * dm * gm / (4.0 * n_dot_in);
-        f_disney += (1.0 - specular_transmission * (1 - metallic)) * f_metal;
+        f_metal = fm * dm * gm / (4.0 * n_dot_in);
     }
 #endif // METAL
 
 #ifdef CLEARCOAT
-    if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_in, vertex.geometric_normal) >= 0)
+    if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_out, vertex.geometric_normal) >= 0)
     {
-        Real r0_c = pow(1.5 - 1.0, 2) / pow(1.5 + 1.0, 2);
-        Real fc = r0_c + (1.0 - r0_c) * pow(1.0 - h_dot_out, 5);
-        Real alpha_g2 = pow((1.0 - clearcoat_gloss) * 0.1 + clearcoat_gloss * 0.001, 2);
-        Real dc = (alpha_g2 - 1.0) * c_INVPI / (log(alpha_g2) * (1.0 + (alpha_g2 - 1) * (hl.z * hl.z)));
-        Real gc = (1.0 / (1.0 + lambda(dir_in, frame, 0.25, 0.25))) * (1.0 / (1.0 + lambda(dir_out, frame, 0.25, 0.25)));
-        Real f_clearcoat = fc * dc * gc / (4.0 * n_dot_in);
-        f_disney += 0.25 * clearcoat * make_const_spectrum(f_clearcoat);
+        struct DisneyClearcoat cc = { bsdf.clearcoat_gloss };
+        f_clearcoat = eval_op{ dir_in, dir_out,vertex,texture_pool,dir }(cc);
     }
 #endif // CLEARCOAT
 
 #ifdef GLASS
-    Spectrum f_glass;
     struct DisneyGlass glass = { bsdf.base_color, bsdf.roughness, bsdf.anisotropic, bsdf.eta };
     f_glass = eval_op{ dir_in, dir_out,vertex,texture_pool,dir }(glass);
-    f_disney += (1 - metallic) * specular_transmission * f_glass;
 #endif // GLASS
+
+    f_disney += (1 - specular_transmission) * (1 - metallic) * f_diffuse;
+    f_disney += (1 - metallic) * sheen * f_sheen;
+    f_disney += 0.25 * clearcoat * (f_clearcoat);
+    f_disney += (1.0 - specular_transmission * (1 - metallic)) * f_metal;
+    f_disney += (1 - metallic) * specular_transmission * f_glass;
 
     return f_disney;
 }

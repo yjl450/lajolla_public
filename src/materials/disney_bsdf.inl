@@ -172,14 +172,14 @@ sample_bsdf_op::operator()(const DisneyBSDF& bsdf) const {
     if (choice <= w_diffuse) {
         record = sample_bsdf(diffuse, dir_in, vertex, texture_pool, rnd_param_uv, rnd_param_w);
     }
-    else if (choice > w_diffuse && choice <= w_diffuse + w_metal) {
+    else if (choice <= w_diffuse + w_metal) {
         record = sample_bsdf(metal, dir_in, vertex, texture_pool, rnd_param_uv, rnd_param_w);
     }
-    else if (choice > w_diffuse + w_metal && choice <= w_diffuse + w_metal + w_clearcoat) {
-        record = sample_bsdf(m_clearcoat, dir_in, vertex, texture_pool, rnd_param_uv, rnd_param_w);
-    }
-    else if (choice > w_diffuse + w_metal + w_clearcoat ) {
+    else if (choice <= w_diffuse + w_metal + w_glass) {
         record = sample_bsdf(glass, dir_in, vertex, texture_pool, rnd_param_uv, rnd_param_w);
+    }
+    else { //clearcoat 加上和不加条件
+        record = sample_bsdf(m_clearcoat, dir_in, vertex, texture_pool, rnd_param_uv, rnd_param_w);
     }
     return record;
 }

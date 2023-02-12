@@ -1,27 +1,4 @@
 #pragma once
-
-Spectrum L_s1(const Scene& scene, Vector3 dir_in, Vector3 p, Medium medium, Spectrum sigma_t, pcg32_state& rng) {
-    int light_id = sample_light(scene, next_pcg32_real<Real>(rng));
-    //int light_id = (int)(next_pcg32_real<Real>(rng) * 2);
-    Light light = scene.lights[light_id];
-    // Random parameters for light sampling
-    Vector2 uv(next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng));
-    Real w = next_pcg32_real<Real>(rng);
-    PointAndNormal point_normal = sample_point_on_light(light, p, uv, w, scene);
-    // Evaluate phase function
-    Vector3 dir_out = normalize(point_normal.position - p); // p(t) to p'(on light)
-    PhaseFunction phase_function = get_phase_function(medium);
-    Vector3 phase = eval(phase_function, -dir_in, dir_out);
-    Spectrum Le = emission(light, -dir_out, Real(0), point_normal, scene);
-    Spectrum transmittance = exp(-sigma_t * length(p - point_normal.position));
-    // Test visibility TODO
-    Real g = max(Real(0), dot(-dir_out, point_normal.normal)) / pow(length(p - point_normal.position), 2);
-    // impotance sampling lights + importance sampling point on light
-    Real L_s1_pdf = pdf_point_on_light(light, point_normal, p, scene) * light_pmf(scene, light_id);
-    Spectrum L_s1_estimate = phase * Le * transmittance * g;
-    return L_s1_estimate / L_s1_pdf;
-}
-
 // The simplest volumetric renderer: 
 // single absorption only homogeneous volume
 // only handle directly visible light sources
@@ -56,6 +33,28 @@ Spectrum vol_path_tracing_1(const Scene &scene,
         Le = emission(vertex, -ray.dir, scene);
     }
     return transmittance * Le;
+}
+
+Spectrum L_s1(const Scene& scene, Vector3 dir_in, Vector3 p, Medium medium, Spectrum sigma_t, pcg32_state& rng) {
+    int light_id = sample_light(scene, next_pcg32_real<Real>(rng));
+    //int light_id = (int)(next_pcg32_real<Real>(rng) * 2);
+    Light light = scene.lights[light_id];
+    // Random parameters for light sampling
+    Vector2 uv(next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng));
+    Real w = next_pcg32_real<Real>(rng);
+    PointAndNormal point_normal = sample_point_on_light(light, p, uv, w, scene);
+    // Evaluate phase function
+    Vector3 dir_out = normalize(point_normal.position - p); // p(t) to p'(on light)
+    PhaseFunction phase_function = get_phase_function(medium);
+    Vector3 phase = eval(phase_function, -dir_in, dir_out);
+    Spectrum Le = emission(light, -dir_out, Real(0), point_normal, scene);
+    Spectrum transmittance = exp(-sigma_t * length(p - point_normal.position));
+    // Test visibility TODO
+    Real g = max(Real(0), dot(-dir_out, point_normal.normal)) / pow(length(p - point_normal.position), 2);
+    // impotance sampling lights + importance sampling point on light
+    Real L_s1_pdf = pdf_point_on_light(light, point_normal, p, scene) * light_pmf(scene, light_id);
+    Spectrum L_s1_estimate = phase * Le * transmittance * g;
+    return L_s1_estimate / L_s1_pdf;
 }
 
 // The second simplest volumetric renderer: 

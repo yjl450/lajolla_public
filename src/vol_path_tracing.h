@@ -113,6 +113,7 @@ Spectrum vol_path_tracing_2(const Scene &scene,
 int update_medium(Ray ray, PathVertex vertex) {
     int medium_id;
     if (vertex.interior_medium_id != vertex.exterior_medium_id) {
+        // If ray exit the object, return exterior id
         if (dot(ray.dir, vertex.geometric_normal) > 0) {
             medium_id = vertex.exterior_medium_id;
         }
@@ -155,19 +156,23 @@ Spectrum vol_path_tracing_3(const Scene &scene,
                 t_hit = length(vertex.position - ray.org);
                 sigma_a = get_sigma_a(medium, make_const_spectrum(t_hit));
                 sigma_s = get_sigma_s(medium, make_const_spectrum(t_hit));
-                sigma_t = sigma_a + sigma_s;
-                transmittance = exp(-sigma_t * t_hit);
-                trans_pdf = transmittance;
             }
             else {
                 sigma_a = get_sigma_a(medium, Vector3(1, 1, 1));
                 sigma_s = get_sigma_s(medium, Vector3(1, 1, 1));
-                sigma_t = sigma_a + sigma_s;
+            }
+            sigma_t = sigma_a + sigma_s;
+            t = -log(1 - next_pcg32_real<Real>(rng)) / sigma_t;
+            if ((!vertex_) || (vertex_ && t.x < t_hit))
+            {
+                scatter = true;
                 transmittance = exp(-sigma_t * t);
                 trans_pdf = transmittance * sigma_t;
             }
-            t = -log(1 - next_pcg32_real<Real>(rng)) / sigma_t;
-            if ((!vertex_) || (vertex_ && t.x < t_hit)) scatter = true;
+            else {
+                transmittance = exp(-sigma_t * t_hit);
+                trans_pdf = transmittance;
+            }
         }
         current_path_throughput *= (transmittance / trans_pdf);
         // Hit a surface, include the emission
@@ -188,25 +193,15 @@ Spectrum vol_path_tracing_3(const Scene &scene,
             PathVertex vertex = *vertex_;
             if (vertex.material_id == -1) {
                 current_medium_id = update_medium(ray, vertex);
-                bounce += 1;
+                bounce++;
+                ray.org = vertex.position;
                 continue;
             }
         }
         //sample next direct & update path throughput
         if (scatter) {
             PhaseFunction phase_function = get_phase_function(medium);
-            Spectrum sigma_s, sigma_a, sigma_t;
-            if (vertex_) {
-                PathVertex vertex = *vertex_;
-                Real t_hit = length(vertex.position - ray.org);
-                sigma_s = get_sigma_s(medium, make_const_spectrum(t_hit));
-                sigma_a = get_sigma_a(medium, make_const_spectrum(t_hit));
-            }
-            else {
-                sigma_s = get_sigma_s(medium, Vector3(1, 1, 1));
-                sigma_a = get_sigma_a(medium, Vector3(1, 1, 1));
-            }
-            sigma_t = sigma_a + sigma_s;
+            Spectrum sigma_s = get_sigma_s(medium, t);
             Vector2 uv(next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng));
             std::optional<Vector3> next_dir_ = sample_phase_function(phase_function, -ray.dir, uv);
             if (next_dir_) {
@@ -222,9 +217,8 @@ Spectrum vol_path_tracing_3(const Scene &scene,
             break;
         }
         // Russian roulette
-        Real rr_prob = 1.f;
         if (bounce >= scene.options.rr_depth) {
-            rr_prob = min(current_path_throughput.x, 0.95);
+            Real rr_prob = min(current_path_throughput.x, 0.95);
             if (next_pcg32_real<Real>(rng) > rr_prob) {
                 break;
             }

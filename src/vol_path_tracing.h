@@ -154,8 +154,8 @@ Spectrum vol_path_tracing_3(const Scene &scene,
             if (vertex_) {
                 PathVertex vertex = *vertex_;
                 t_hit = length(vertex.position - ray.org);
-                sigma_a = get_sigma_a(medium, make_const_spectrum(t_hit));
-                sigma_s = get_sigma_s(medium, make_const_spectrum(t_hit));
+                sigma_a = get_sigma_a(medium, vertex.position);
+                sigma_s = get_sigma_s(medium, vertex.position);
             }
             else {
                 sigma_a = get_sigma_a(medium, Vector3(1, 1, 1));
@@ -200,8 +200,9 @@ Spectrum vol_path_tracing_3(const Scene &scene,
         }
         //sample next direct & update path throughput
         if (scatter) {
+            Vector3 p = ray.org + t * ray.dir;
             PhaseFunction phase_function = get_phase_function(medium);
-            Spectrum sigma_s = get_sigma_s(medium, t);
+            Spectrum sigma_s = get_sigma_s(medium, p);
             Vector2 uv(next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng));
             std::optional<Vector3> next_dir_ = sample_phase_function(phase_function, -ray.dir, uv);
             if (next_dir_) {
@@ -209,7 +210,6 @@ Spectrum vol_path_tracing_3(const Scene &scene,
                 Spectrum phase = eval(phase_function, -ray.dir, next_dir);
                 current_path_throughput *=
                     (phase / pdf_sample_phase(phase_function, -ray.dir, next_dir)) * sigma_s;
-                Vector3 p = ray.org + t * ray.dir;
                 ray = Ray{ p,next_dir, Real(0), infinity<Real>() };
             }
         }

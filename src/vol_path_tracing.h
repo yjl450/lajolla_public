@@ -9,7 +9,7 @@ Spectrum vol_path_tracing_1(const Scene &scene,
     int w = scene.camera.width, h = scene.camera.height;
     Vector2 screen_pos((x + next_pcg32_real<Real>(rng)) / w,
         (y + next_pcg32_real<Real>(rng)) / h);
-    Ray ray = sample_primary(scene.camera, screen_pos); 
+    Ray ray = sample_primary(scene.camera, screen_pos);
     RayDifferential ray_diff = RayDifferential{ Real(0), Real(0) };
     std::optional<PathVertex> vertex_ = intersect(scene, ray, ray_diff);
     if (!vertex_) {
@@ -49,7 +49,7 @@ Spectrum L_s1(const Scene& scene, Vector3 dir_in, Vector3 p, PhaseFunction phase
     Spectrum Le = emission(light, -dir_out, Real(0), point_normal, scene);
     Spectrum transmittance = exp(-sigma_t * length(p - point_normal.position));
     // Test visibility TODO
-    Real g = max(Real(0), dot(-dir_out, point_normal.normal)) / pow(length(p - point_normal.position), 2);
+    Real g = max(Real(0), dot(-dir_out, point_normal.normal)) / length_squared(p - point_normal.position);
     // impotance sampling lights + importance sampling point on light
     Real L_s1_pdf = pdf_point_on_light(light, point_normal, p, scene) * light_pmf(scene, light_id);
     Spectrum L_s1_estimate = phase * Le * transmittance * g;

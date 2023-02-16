@@ -194,11 +194,11 @@ Spectrum vol_path_tracing_3(const Scene &scene,
             if (vertex.material_id == -1) {
                 current_medium_id = update_medium(ray, vertex);
                 bounce++;
-                ray.org = vertex.position;
+                ray.org = vertex.position + get_intersection_epsilon(scene) * ray.dir;
                 continue;
             }
         }
-        //sample next direct & update path throughput
+        //sample next direction & update path throughput
         if (scatter) {
             Vector3 p = ray.org + t * ray.dir;
             PhaseFunction phase_function = get_phase_function(medium);
@@ -210,7 +210,7 @@ Spectrum vol_path_tracing_3(const Scene &scene,
                 Spectrum phase = eval(phase_function, -ray.dir, next_dir);
                 current_path_throughput *=
                     (phase / pdf_sample_phase(phase_function, -ray.dir, next_dir)) * sigma_s;
-                ray = Ray{ p,next_dir, Real(0), infinity<Real>() };
+                ray = Ray{ p + get_intersection_epsilon(scene) * next_dir,next_dir, Real(0), infinity<Real>() };
             }
         }
         else {

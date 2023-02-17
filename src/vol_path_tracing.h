@@ -222,7 +222,7 @@ Spectrum vol_path_tracing_3(const Scene &scene,
     return radiance;
 }
 
-Spectrum next_event(Scene scene, Light light, Vector3 p, Real pdf_dir, int medium_id, int bounce, pcg32_state& rng) {
+Spectrum next_event(Scene scene, Light light, Vector3 p, Spectrum phase, Real pdf_dir, int medium_id, int bounce, pcg32_state& rng) {
     Vector2 uv = Vector2(next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng));
     PointAndNormal pt_normal = sample_point_on_light(light, p, uv, next_pcg32_real<Real>(rng), scene);
     Real pdf_NEE = pdf_point_on_light(light, pt_normal, p, scene);
@@ -231,33 +231,30 @@ Spectrum next_event(Scene scene, Light light, Vector3 p, Real pdf_dir, int mediu
     Spectrum pdf_trans_dir = make_const_spectrum(1.f);
     int shadow_medium_id = medium_id;
     int shadow_bounce = 0;
-    Spectrum Le = make_zero_spectrum();
     RayDifferential ray_diff = RayDifferential{ Real(0), Real(0) };
     Ray shadow_ray = Ray{ p, normalize(p_prime - p), Real(0), infinity<Real>() };
     while (1) {
+        bool blocked = false;
         std::optional<PathVertex> vertex_ = intersect(scene, shadow_ray, ray_diff);
         Real next_t = length(p_prime - p);
         if (vertex_) {
             PathVertex vertex = *vertex_;
-            next_t = length(vertex.position - p);
+            if (length(vertex.position - p) < length(p_prime - p)) {
+                next_t = length(vertex.position - p);
+                blocked = true;
+            }
         }
         if (shadow_medium_id != -1) {
             Medium medium = scene.media[shadow_medium_id];
             Spectrum sigma_a, sigma_s;
-            if (vertex_) {
-                PathVertex vertex = *vertex_;
-                sigma_a = get_sigma_a(medium, vertex.position);
-                sigma_s = get_sigma_s(medium, vertex.position);
-            }
-            else {
-                sigma_a = get_sigma_a(medium, p_prime);
-                sigma_s = get_sigma_s(medium, p_prime);
-            }
+            Vector3 position = shadow_ray.org + next_t * shadow_ray.dir;
+            sigma_a = get_sigma_a(medium, position);
+            sigma_s = get_sigma_s(medium, position);
             Spectrum sigma_t = sigma_s + sigma_a;
             transmittance_light *= exp(-sigma_t * next_t);
             pdf_trans_dir *= exp(-sigma_t * next_t);
         }
-        if (!vertex_) {
+        if (!blocked) {
             break;
         }
         else {

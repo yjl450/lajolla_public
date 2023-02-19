@@ -238,16 +238,12 @@ Spectrum next_event(Scene scene, Vector3 p, Vector3 dir_in, Real pdf_dir, int me
     RayDifferential ray_diff = RayDifferential{ Real(0), Real(0) };
     Vector3 org_p = p;
     while (1) {
-        Ray shadow_ray = Ray{ p, normalize(p_prime - p), get_shadow_epsilon(scene), (1 - get_shadow_epsilon(scene)) * length(p_prime - p) };
-        bool blocked = false;
+        Ray shadow_ray = Ray{ p, normalize(p_prime - p), Real(0), (1 - get_shadow_epsilon(scene)) * length(p_prime - p)};
         std::optional<PathVertex> vertex_ = intersect(scene, shadow_ray, ray_diff);
         Real next_t = length(p_prime - p);
         if (vertex_) {
             PathVertex vertex = *vertex_;
-            if (length(vertex.position - p) < length(p_prime - p)) {
-                next_t = length(vertex.position - p);
-                blocked = true;
-            }
+            next_t = length(vertex.position - p);
         }
         if (shadow_medium_id != -1) {
             Medium medium = scene.media[shadow_medium_id];
@@ -258,7 +254,7 @@ Spectrum next_event(Scene scene, Vector3 p, Vector3 dir_in, Real pdf_dir, int me
             transmittance_light *= exp(-sigma_t * next_t);
             pdf_trans_dir *= exp(-sigma_t * next_t);
         }
-        if (!blocked) {
+        if (!vertex_) {
             break;
         }
         else {
@@ -284,7 +280,6 @@ Spectrum next_event(Scene scene, Vector3 p, Vector3 dir_in, Real pdf_dir, int me
 
         Real pdf_phase = pdf_sample_phase(phase_function, -dir_in, dir_out) * g * pdf_trans_dir.x;
         Real w = pow(pdf_NEE, 2) / (pow(pdf_phase, 2) + pow(pdf_NEE, 2));
-        //w = Real(1);
         return w * contrib;
     }
     return make_zero_spectrum();
@@ -365,7 +360,6 @@ Spectrum vol_path_tracing_4(const Scene &scene,
                     Real g = abs(dot(-ray.dir, vertex.geometric_normal)) / length_squared(ray.org - vertex.position);
                     Real pdf_phase = dir_pdf * multi_trans_pdf * g;
                     Real w = pow(pdf_phase, 2) / (pow(pdf_phase, 2) + pow(pdf_NEE, 2));
-                    //w = Real(1.0);
                     radiance += current_path_throughput * Le * w;
                     break;
                 }
@@ -388,7 +382,7 @@ Spectrum vol_path_tracing_4(const Scene &scene,
         }
         //sample next direction & update path throughput
         if (scatter) {
-            p = ray.org + t * ray.dir;
+            p = ray.org + (t + get_intersection_epsilon(scene)) * ray.dir;
             Spectrum sigma_s = get_sigma_s(medium, p);
 
             // Next event estimation

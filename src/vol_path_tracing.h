@@ -386,7 +386,7 @@ Spectrum vol_path_tracing_4(const Scene &scene,
             Spectrum sigma_s = get_sigma_s(medium, p);
 
             // Next event estimation
-            Spectrum NEE = next_event(scene, p, -ray.dir, dir_pdf, current_medium_id, bounce, rng);
+            Spectrum NEE = next_event(scene, p, ray.dir, dir_pdf, current_medium_id, bounce, rng);
             radiance += current_path_throughput * sigma_s * NEE;
 
             // Next bounce

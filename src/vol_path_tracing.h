@@ -222,18 +222,23 @@ Spectrum vol_path_tracing_3(const Scene &scene,
     return radiance;
 }
 
-Spectrum next_event(Scene scene, Light light, Vector3 p, Spectrum phase, Real pdf_dir, int medium_id, int bounce, pcg32_state& rng) {
+Spectrum next_event(Scene scene, Vector3 p, Vector3 dir_in, Real pdf_dir, int medium_id, int bounce, pcg32_state& rng) {
+    // Sample light
+    int light_id = sample_light(scene, next_pcg32_real<Real>(rng));
+    Light light = scene.lights[light_id];
     Vector2 uv = Vector2(next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng));
     PointAndNormal pt_normal = sample_point_on_light(light, p, uv, next_pcg32_real<Real>(rng), scene);
-    Real pdf_NEE = pdf_point_on_light(light, pt_normal, p, scene);
+    Real pdf_NEE = pdf_point_on_light(light, pt_normal, p, scene) * light_pmf(scene, light_id);
     Vector3 p_prime = pt_normal.position;
+    // Init var
+    int shadow_medium_id = medium_id;
     Spectrum transmittance_light = make_const_spectrum(1.f);
     Spectrum pdf_trans_dir = make_const_spectrum(1.f);
-    int shadow_medium_id = medium_id;
     int shadow_bounce = 0;
     RayDifferential ray_diff = RayDifferential{ Real(0), Real(0) };
-    Ray shadow_ray = Ray{ p, normalize(p_prime - p), Real(0), infinity<Real>() };
+    Vector3 org_p = p;
     while (1) {
+        Ray shadow_ray = Ray{ p, normalize(p_prime - p), get_shadow_epsilon(scene), (1 - get_shadow_epsilon(scene)) * length(p_prime - p) };
         bool blocked = false;
         std::optional<PathVertex> vertex_ = intersect(scene, shadow_ray, ray_diff);
         Real next_t = length(p_prime - p);
@@ -246,10 +251,9 @@ Spectrum next_event(Scene scene, Light light, Vector3 p, Spectrum phase, Real pd
         }
         if (shadow_medium_id != -1) {
             Medium medium = scene.media[shadow_medium_id];
-            Spectrum sigma_a, sigma_s;
             Vector3 position = shadow_ray.org + next_t * shadow_ray.dir;
-            sigma_a = get_sigma_a(medium, position);
-            sigma_s = get_sigma_s(medium, position);
+            Spectrum sigma_a = get_sigma_a(medium, position);
+            Spectrum sigma_s = get_sigma_s(medium, position);
             Spectrum sigma_t = sigma_s + sigma_a;
             transmittance_light *= exp(-sigma_t * next_t);
             pdf_trans_dir *= exp(-sigma_t * next_t);
@@ -267,18 +271,21 @@ Spectrum next_event(Scene scene, Light light, Vector3 p, Spectrum phase, Real pd
                 return make_zero_spectrum();
             }
             shadow_medium_id = update_medium(shadow_ray, vertex);
-            shadow_ray.org += next_t * shadow_ray.dir;
+            p += (next_t + get_intersection_epsilon(scene)) * shadow_ray.dir;
         }
     }
     if (transmittance_light.x > 0) {
-        Vector3 dir_out = normalize(p - p_prime);
-        Le = emission(light, dir_out, Real(0), pt_normal, scene);
-        Real g = abs(dot(dir_out, pt_normal.normal)) / length_squared(p - p_prime);
-        Spectrum contrib = transmittance_light * g * Le / pdf_NEE;
-        Real pdf_phase = pdf_dir * g * pdf_trans_dir.x;
+        Vector3 dir_out = normalize(org_p - p_prime);
+        PhaseFunction phase_function = get_phase_function(scene.media[medium_id]);
+        Spectrum f = eval(phase_function, -dir_in, dir_out);
+        Spectrum Le = emission(light, dir_out, Real(0), pt_normal, scene);
+        Real g = abs(dot(dir_out, pt_normal.normal)) / length_squared(org_p - p_prime);
+        Spectrum contrib = transmittance_light * g *f.x * Le / pdf_NEE;
+
+        Real pdf_phase = pdf_sample_phase(phase_function, -dir_in, dir_out) * g * pdf_trans_dir.x;
         Real w = pow(pdf_NEE, 2) / (pow(pdf_phase, 2) + pow(pdf_NEE, 2));
-        Spectrum radiance = w * contrib;
-        return radiance;
+        //w = Real(1);
+        return w * contrib;
     }
     return make_zero_spectrum();
 }
@@ -311,6 +318,7 @@ Spectrum vol_path_tracing_4(const Scene &scene,
         Spectrum transmittance = make_const_spectrum(1.f);
         Spectrum trans_pdf = make_const_spectrum(1.f);
         Spectrum t = make_zero_spectrum();
+        Spectrum phase = make_const_spectrum(1);
         if (current_medium_id != -1) {
             Spectrum sigma_a, sigma_s, sigma_t;
             Real t_hit = -1;
@@ -332,7 +340,6 @@ Spectrum vol_path_tracing_4(const Scene &scene,
                 never_scatter = false;
                 transmittance = exp(-sigma_t * t);
                 trans_pdf = transmittance * sigma_t;
-                p = ray.org + t * ray.dir;
             }
             else {
                 transmittance = exp(-sigma_t * t_hit);
@@ -340,25 +347,25 @@ Spectrum vol_path_tracing_4(const Scene &scene,
             }
         }
         current_path_throughput *= (transmittance / trans_pdf);
-        multi_trans_pdf *= trans_pdf.x;
         // Hit a surface, include the emission
         if (!scatter && vertex_) {
             PathVertex vertex = *vertex_;
-            Spectrum Le = make_zero_spectrum();
             if (is_light(scene.shapes[vertex.shape_id])) {
-                Le = emission(vertex, -ray.dir, scene);
+                Spectrum Le = emission(vertex, -ray.dir, scene);
                 if (never_scatter) {
                     radiance += current_path_throughput * Le;
                     break;
                 }
                 else {
                     // account for NEE
-                    Light light = scene.lights[get_area_light_id(scene.shapes[vertex.shape_id])];
+                    int light_id = get_area_light_id(scene.shapes[vertex.shape_id]);
+                    Light light = scene.lights[light_id];
                     PointAndNormal pt_normal{ vertex.position, vertex.geometric_normal };
-                    Real pdf_NEE = pdf_point_on_light(light, pt_normal, ray.org, scene);
+                    Real pdf_NEE = pdf_point_on_light(light, pt_normal, p, scene) * light_pmf(scene, light_id);
                     Real g = abs(dot(-ray.dir, vertex.geometric_normal)) / length_squared(ray.org - vertex.position);
-                    Real dir_phase = dir_pdf * multi_trans_pdf * g;
-                    Real w = pow(dir_phase, 2) / (pow(dir_phase, 2) + pow(pdf_NEE, 2));
+                    Real pdf_phase = dir_pdf * multi_trans_pdf * g;
+                    Real w = pow(pdf_phase, 2) / (pow(pdf_phase, 2) + pow(pdf_NEE, 2));
+                    //w = Real(1.0);
                     radiance += current_path_throughput * Le * w;
                     break;
                 }
@@ -371,35 +378,35 @@ Spectrum vol_path_tracing_4(const Scene &scene,
         // Hit a surface, update medium
         if (!scatter && vertex_) {
             PathVertex vertex = *vertex_;
+            multi_trans_pdf *= trans_pdf.x;
             if (vertex.material_id == -1) {
                 current_medium_id = update_medium(ray, vertex);
                 bounce++;
-                ray.org = vertex.position;
+                ray.org = vertex.position + get_intersection_epsilon(scene) * ray.dir;
                 continue;
             }
         }
-        //sample next direct & update path throughput
+        //sample next direction & update path throughput
         if (scatter) {
+            p = ray.org + t * ray.dir;
+            Spectrum sigma_s = get_sigma_s(medium, p);
+
             // Next event estimation
-            int NEE_light_id = sample_light(scene, next_pcg32_real<Real>(rng));
-            Light NEE_light = scene.lights[NEE_light_id];
-            Real pmf_NEE_light = light_pmf(scene, NEE_light_id);
-            Spectrum NEE = next_event(scene, NEE_light, p, dir_pdf, current_medium_id, bounce, rng);
-            radiance += current_path_throughput * NEE / pmf_NEE_light;
+            Spectrum NEE = next_event(scene, p, -ray.dir, dir_pdf, current_medium_id, bounce, rng);
+            radiance += current_path_throughput * sigma_s * NEE;
 
             // Next bounce
             PhaseFunction phase_function = get_phase_function(medium);
-            Spectrum sigma_s = get_sigma_s(medium, p);
             Vector2 uv(next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng));
             std::optional<Vector3> next_dir_ = sample_phase_function(phase_function, -ray.dir, uv);
-            multi_trans_pdf = 1;
             if (next_dir_) {
+                multi_trans_pdf = 1;
                 Vector3 next_dir = *next_dir_;
-                Spectrum phase = eval(phase_function, -ray.dir, next_dir);
-                dir_pdf = pdf_sample_phase(phase_function, -ray.dir, next_dir);
+                phase = eval(phase_function, -ray.dir, next_dir);
+                dir_pdf = pdf_sample_phase(phase_function, ray.dir, next_dir);
                 current_path_throughput *=
                     (phase / dir_pdf) * sigma_s;
-                ray = Ray{ p,next_dir, Real(0), infinity<Real>() };
+                ray = Ray{ p ,next_dir, Real(0), infinity<Real>() };
             }
         }
         else {

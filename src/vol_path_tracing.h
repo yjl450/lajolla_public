@@ -567,7 +567,7 @@ Spectrum vol_path_tracing_5(const Scene &scene,
                 radiance += current_path_throughput * NEE;
                 never_scatter = false;
 
-                //// BSDF Sampling direction
+                // BSDF Sampling direction
                 Vector3 dir_view = -ray.dir;
                 Vector2 bsdf_rnd_param_uv{ next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng) };
                 Real bsdf_rnd_param_w = next_pcg32_real<Real>(rng);

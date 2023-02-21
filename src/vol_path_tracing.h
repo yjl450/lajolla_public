@@ -226,7 +226,7 @@ Spectrum vol_path_tracing_3(const Scene &scene,
     return radiance;
 }
 
-Spectrum next_event(Scene scene, Vector3 p, Vector3 dir_in, int medium_id, int bounce, pcg32_state& rng, bool eval_mat = false, Material mat = Material(), PathVertex v = PathVertex()) {
+Spectrum next_event(const Scene& scene, Vector3 p, Vector3 dir_in, int medium_id, int bounce, pcg32_state& rng, bool eval_mat = false, Material mat = Material(), PathVertex v = PathVertex()) {
     // Sample light
     int light_id = sample_light(scene, next_pcg32_real<Real>(rng));
     Light light = scene.lights[light_id];

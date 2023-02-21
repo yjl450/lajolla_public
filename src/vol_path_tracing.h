@@ -1,13 +1,4 @@
 #pragma once
-
-inline int clamp_channel(pcg32_state& rng) {
-    return min(max((int)(next_pcg32_real<Real>(rng) * 3), 0), 2);
-}
-
-inline Real min(Spectrum s) {
-    return min(min(s.x, s.y), s.z);
-}
-
 // The simplest volumetric renderer: 
 // single absorption only homogeneous volume
 // only handle directly visible light sources
@@ -618,6 +609,109 @@ Spectrum vol_path_tracing_5(const Scene &scene,
     return radiance;
 }
 
+Spectrum next_event_het(const Scene& scene, Vector3 p, Vector3 dir_in, int medium_id, int bounce, pcg32_state& rng, bool eval_mat = false, const Material& mat = Material(), const PathVertex& v = PathVertex()) {
+    // Sample light
+    int light_id = sample_light(scene, next_pcg32_real<Real>(rng));
+    Light light = scene.lights[light_id];
+    Vector2 uv = Vector2(next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng));
+    PointAndNormal pt_normal = sample_point_on_light(light, p, uv, next_pcg32_real<Real>(rng), scene);
+    Spectrum pdf_NEE = make_const_spectrum(pdf_point_on_light(light, pt_normal, p, scene) * light_pmf(scene, light_id));
+    Vector3 p_prime = pt_normal.position;
+    // Init var
+    int shadow_medium_id = medium_id;
+    Spectrum transmittance_light = make_const_spectrum(1.f);
+    Spectrum pdf_trans_dir = make_const_spectrum(1.f);
+    Spectrum pdf_trans_nee = make_const_spectrum(1.f);
+    int shadow_bounce = 0;
+    RayDifferential ray_diff = RayDifferential{ Real(0), Real(0) };
+    Vector3 init_p = p;
+    while (1) {
+        Ray shadow_ray = Ray{ p, normalize(p_prime - p), get_shadow_epsilon(scene), (1 - get_shadow_epsilon(scene)) * length(p_prime - p) };
+        std::optional<PathVertex> vertex_ = intersect(scene, shadow_ray, ray_diff);
+        Real next_t = length(p_prime - p);
+        if (vertex_) {
+            PathVertex vertex = *vertex_;
+            next_t = length(vertex.position - p);
+
+        }
+        if (shadow_medium_id != -1) {
+            const Medium& medium = scene.media[shadow_medium_id];
+            Spectrum majorant = get_majorant(medium, shadow_ray);                
+            Real u = next_pcg32_real<Real>(rng);
+            int channel = std::clamp(int(u * 3), 0, 2);
+            int iteration = 0;
+            Real accum_t = 0;
+            while (1) {
+                if (majorant[channel] <= 0) {
+                    break;
+                }
+                if (iteration >= scene.options.max_null_collisions) {
+                    break;
+                }
+                Real t = -log(1 - next_pcg32_real<Real>(rng)) / majorant[channel];
+                Real dt = next_t - accum_t;
+                accum_t = min(accum_t + t, next_t);
+                if (t < dt) {
+                    Vector3 position = shadow_ray.org + accum_t * shadow_ray.dir;
+                    Spectrum sigma_a = get_sigma_a(medium, position);
+                    Spectrum sigma_s = get_sigma_s(medium, position);
+                    Spectrum sigma_t = sigma_s + sigma_a;
+                    Spectrum sigma_n = majorant * (1 - sigma_t / majorant);
+                    transmittance_light *= exp(-majorant * t) * sigma_n / max(majorant);
+                    pdf_trans_nee *= exp(-majorant * t) * majorant / max(majorant);
+                    Spectrum real_prob = sigma_t / majorant;
+                    pdf_trans_dir *= exp(-majorant * t) * majorant * (1 - real_prob) / max(majorant);
+                    if (max(transmittance_light) <= 0) {
+                        break;
+                    }
+                }
+                else {
+                    transmittance_light *= exp(-majorant * dt);
+                    pdf_trans_nee *= exp(-majorant * dt);
+                    pdf_trans_dir *= exp(-majorant * dt);
+                }
+                iteration++;
+            }
+        }
+        if (!vertex_) {
+            break;
+        }
+        else {
+            PathVertex vertex = *vertex_;
+            if (vertex.material_id >= 0) {
+                return make_zero_spectrum(); // blocked
+            }
+            shadow_bounce++;
+            if (scene.options.max_depth != -1 && bounce + shadow_bounce + 1 >= scene.options.max_depth) {
+                return make_zero_spectrum();
+            }
+            shadow_medium_id = update_medium(shadow_ray, vertex);
+            p += next_t * shadow_ray.dir;
+        }
+    }
+    if (max(transmittance_light) > 0) {
+        Vector3 dir_out = normalize(init_p - p_prime);
+        Spectrum f;
+        Spectrum pdf_dir;
+        Spectrum Le = emission(light, dir_out, Real(0), pt_normal, scene);
+        Real g = abs(dot(dir_out, pt_normal.normal)) / length_squared(init_p - p_prime);
+        if (eval_mat) {
+            f = eval(mat, -dir_in, -dir_out, v, scene.texture_pool);
+            pdf_dir = pdf_sample_bsdf(mat, -dir_in, -dir_out, v, scene.texture_pool) * g * pdf_trans_dir;
+        }
+        else {
+            PhaseFunction phase_function = get_phase_function(scene.media[medium_id]);
+            f = eval(phase_function, -dir_in, -dir_out);
+            pdf_dir = pdf_sample_phase(phase_function, -dir_in, -dir_out) * g * pdf_trans_dir;
+        }
+        pdf_NEE *= pdf_trans_nee;
+        Spectrum contrib = transmittance_light * g * f * Le / pdf_NEE;
+        Spectrum w = (pdf_NEE*pdf_NEE) / ((pdf_dir * pdf_dir) + (pdf_NEE * pdf_NEE));
+        return w * contrib;
+    }
+    return make_zero_spectrum();
+}
+
 // The final volumetric renderer: 
 // multiple chromatic heterogeneous volumes with multiple scattering
 // with MIS between next event estimation and phase function sampling
@@ -648,8 +742,9 @@ Spectrum vol_path_tracing(const Scene &scene,
         Spectrum trans_dir_pdf = make_const_spectrum(1); // PDF for free-flight sampling
         Spectrum trans_nee_pdf = make_const_spectrum(1); // PDF for next event estimation
         Real accum_t = 0;
-        if (current_medium_id != -1) { // In medium
-            int channel = clamp_channel(rng);
+        if (current_medium_id != -1) { // In medium                
+            Real u = next_pcg32_real<Real>(rng);
+            int channel = std::clamp(int(u * 3), 0, 2);
             const Medium& medium = scene.media[current_medium_id];
             Spectrum majorant = get_majorant(medium, ray);
             Real t_hit = infinity<Real>();
@@ -745,7 +840,8 @@ Spectrum vol_path_tracing(const Scene &scene,
             Spectrum sigma_s = get_sigma_s(medium, p);
 
             // Next event estimation
-            Spectrum NEE = next_event(scene, p, ray.dir, current_medium_id, bounce, rng);
+            //Spectrum NEE = next_event(scene, p, ray.dir, current_medium_id, bounce, rng);
+            Spectrum NEE = next_event_het(scene, p, ray.dir, current_medium_id, bounce, rng);
             radiance += current_path_throughput * sigma_s * NEE;
 
             // Next bounce
@@ -768,7 +864,8 @@ Spectrum vol_path_tracing(const Scene &scene,
                 p = vertex.position;
                 const Material& mat = scene.materials[vertex.material_id];
                 // Importance Sampling
-                Spectrum NEE = next_event(scene, vertex.position, ray.dir, current_medium_id, bounce, rng, true, mat, vertex);
+                //Spectrum NEE = next_event(scene, vertex.position, ray.dir, current_medium_id, bounce, rng, true, mat, vertex);
+                Spectrum NEE = next_event_het(scene, vertex.position, ray.dir, current_medium_id, bounce, rng, true, mat, vertex);
                 radiance += current_path_throughput * NEE;
                 never_scatter = false;
 

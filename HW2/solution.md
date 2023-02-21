@@ -1,3 +1,5 @@
+By Yijian Liu (yil212)
+
 ## 2
 1. Change the absorption parameters to zero in scenes/volpath_test/volpath_test1.xml. What do you see? Why?
    
@@ -90,3 +92,8 @@ appearance? Why?
 3. Why is it important to have an unbiased solution for volume rendering? Would it be sensible to have something that is biased but faster? How would you do it?
 
     I think it is important to have an unbiased solution when the results of rendering needs to be connected to real world, such as simulation or differentiable rendering. A faster but biased solution is needed because human eyes cannot distingush the results when the visual fidelity reaches certain level.
+
+## Bonus
+A scene by myself.
+Rendered image: monkey.exr
+Scene file in monkey folder

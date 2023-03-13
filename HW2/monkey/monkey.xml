@@ -2,7 +2,7 @@
 
 <!-- Defaults, these can be set via the command line: -Darg=value -->
 
-	<default name="spp" value="1024"/>
+	<default name="spp" value="4096"/>
 	<default name="resx" value="426"/>
 	<default name="resy" value="240"/>
 
@@ -10,7 +10,7 @@
 
 	<integrator type="volpath">
 		<integer name="maxDepth" value="6"/>
-		<integer name="version" value="5"/>
+		<integer name="version" value="6"/>
 	</integrator>
 
 	<sensor type="perspective">
@@ -94,26 +94,26 @@
 	</medium>
 <!-- Emitters -->
 
-	<shape type="rectangle">
-		<boolean name="flip_normals" value="true"/>
-		<transform name="to_world">
-			<matrix value="0.500000 0.000000 0.000000 13.148618 0.000000 0.000000 0.500000 23.857929 0.000000 -0.500000 0.000000 -0.073020 0.000000 0.000000 0.000000 1.000000"/>
-		</transform>
-		<emitter type="area">
-			<rgb value="1500.000000 1500.000000 1500.000000" name="radiance"/>
-		</emitter>
-		<bsdf type="null"/>
-	</shape>
-	<shape type="rectangle">
-		<boolean name="flip_normals" value="true"/>
-		<transform name="to_world">
-			<matrix value="0.065439 -0.000000 0.495699 27.788719 -0.495699 0.000000 0.065439 5.640162 -0.000000 -0.500000 -0.000000 -0.000000 0.000000 0.000000 0.000000 1.000000"/>
-		</transform>
-		<emitter type="area">
-			<rgb value="75.000000 75.000000 75.000000" name="radiance"/>
-		</emitter>
-		<bsdf type="null"/>
-	</shape>
+  <shape type="rectangle">
+    <boolean name="flip_normals" value="true"/>
+    <transform name="to_world">
+      <matrix value="0.500000 0.000000 0.000000 13.148618 0.000000 0.000000 0.500000 23.857929 0.000000 -0.500000 0.000000 -0.073020 0.000000 0.000000 0.000000 1.000000"/>
+    </transform>
+    <emitter type="area">
+      <rgb value="2500.000000 2500.000000 2500.000000" name="radiance"/>
+    </emitter>
+    <bsdf type="null"/>
+  </shape>
+  <shape type="rectangle">
+    <boolean name="flip_normals" value="true"/>
+    <transform name="to_world">
+      <matrix value="0.065439 -0.000000 0.495699 48.404133 -0.495699 0.000000 0.065439 7.656887 -0.000000 -0.500000 -0.000000 -0.000000 0.000000 0.000000 0.000000 1.000000"/>
+    </transform>
+    <emitter type="area">
+      <rgb value="500.000000 500.000000 500.000000" name="radiance"/>
+    </emitter>
+    <bsdf type="null"/>
+  </shape>
 
 <!-- Shapes -->
 

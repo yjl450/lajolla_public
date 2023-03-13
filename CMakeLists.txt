@@ -99,7 +99,8 @@ set(SRCS src/3rdparty/miniz.h
          src/shape.cpp
          src/table_dist.cpp
          src/transform.cpp
-         src/volume.cpp)
+         src/volume.cpp
+         src/spectrum.cpp)
 
 add_library(lajolla_lib STATIC ${SRCS})
 add_executable(lajolla src/main.cpp)

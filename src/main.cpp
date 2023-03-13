@@ -29,6 +29,7 @@ int main(int argc, char *argv[]) {
 
     RTCDevice embree_device = rtcNewDevice(nullptr);
     parallel_init(num_threads);
+    WaveSpectrum::Init();
 
     for (const std::string &filename : filenames) {
         Timer timer;

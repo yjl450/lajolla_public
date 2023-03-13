@@ -97,6 +97,11 @@ struct DisneyBSDF {
     Real eta;
 };
 
+
+struct Iridescent {
+    Texture<Spectrum> base_color;
+};
+
 // To add more materials, first create a struct for the material, then overload the () operators for all the
 // functors below.
 using Material = std::variant<Lambertian,
@@ -107,7 +112,8 @@ using Material = std::variant<Lambertian,
                               DisneyGlass,
                               DisneyClearcoat,
                               DisneySheen,
-                              DisneyBSDF>;
+                              DisneyBSDF,
+                              Iridescent>;
 
 /// We allow non-reciprocal BRDFs, so it's important
 /// to distinguish which direction we are tracing the rays.

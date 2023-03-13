@@ -1163,6 +1163,24 @@ std::tuple<std::string /* ID */, Material> parse_bsdf(
                                               clearcoat,
                                               clearcoat_gloss,
                                               eta});
+    }
+    else if (type == "iridescent") {
+        // TODO: add iridescent parameters 
+        Texture<Spectrum> base_color =
+            make_constant_spectrum_texture(fromRGB(Vector3{ 0.5, 0.5, 0.5 }));
+        //Texture<Real> sheen_tint = make_constant_float_texture(Real(0.5));
+        //for (auto child : node.children()) {
+        //    std::string name = child.attribute("name").value();
+        //    if (name == "baseColor" || name == "base_color") {
+        //        base_color = parse_spectrum_texture(
+        //            child, texture_map, texture_pool, default_map);
+        //    }
+        //    else if (name == "sheenTint" || name == "sheen_tint") {
+        //        sheen_tint = parse_float_texture(
+        //            child, texture_map, texture_pool, default_map);
+        //    }
+        //}
+        return std::make_tuple(id, Iridescent{ base_color });
     } else if (type == "null") {
         // TODO: implement actual null BSDF (the ray will need to pass through the shape)
         return std::make_tuple(id, Lambertian{

@@ -810,10 +810,10 @@ Spectrum vol_path_tracing(const Scene &scene,
                     int light_id = get_area_light_id(scene.shapes[vertex.shape_id]);
                     Light light = scene.lights[light_id];
                     PointAndNormal pt_normal{ vertex.position, vertex.geometric_normal };
-                    Real pdf_NEE = pdf_point_on_light(light, pt_normal, p, scene) * light_pmf(scene, light_id) * avg(trans_nee_pdf);
+                    Spectrum pdf_NEE = pdf_point_on_light(light, pt_normal, p, scene) * light_pmf(scene, light_id) *trans_nee_pdf;
                     Real g = abs(dot(-ray.dir, vertex.geometric_normal)) / length_squared(p - vertex.position);
-                    Real pdf_phase = dir_pdf * avg(multi_trans_pdf) * g;
-                    Real w = pow(pdf_phase, 2) / (pow(pdf_phase, 2) + pow(pdf_NEE, 2));
+                    Spectrum pdf_phase = dir_pdf * multi_trans_pdf * g;
+                    Spectrum w = pdf_phase * pdf_phase / (pdf_phase * pdf_phase + pdf_NEE * pdf_NEE);
                     radiance += current_path_throughput * Le * w;
                 }
             }

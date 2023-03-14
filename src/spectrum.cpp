@@ -20,6 +20,8 @@ WaveSpectrum WaveSpectrum::rgbIllum2SpectYellow;
 WaveSpectrum WaveSpectrum::rgbIllum2SpectRed;
 WaveSpectrum WaveSpectrum::rgbIllum2SpectGreen;
 WaveSpectrum WaveSpectrum::rgbIllum2SpectBlue;
+WaveSpectrum WaveSpectrum::centeral_wavelength;
+Real WaveSpectrum::interval;
 
 const Real RGB2SpectLambda[nRGB2SpectSamples] = {
     380.000000, 390.967743, 401.935486, 412.903229, 423.870972, 434.838715,

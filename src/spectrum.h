@@ -198,10 +198,12 @@ private:
     static WaveSpectrum rgbIllum2SpectMagenta, rgbIllum2SpectYellow;
     static WaveSpectrum rgbIllum2SpectRed, rgbIllum2SpectGreen;
     static WaveSpectrum rgbIllum2SpectBlue;
+    static WaveSpectrum centeral_wavelength;
+public:
     static const int wavelength_beg = 400;
     static const int wavelength_end = 700;
-    const Real interval = (wavelength_end - wavelength_beg) / nSpectralSamples;
-public:
+    static Real interval;
+
     WaveSpectrum() {
         memset(c, Real(0), nSpectralSamples * sizeof(Real));
     }
@@ -216,6 +218,7 @@ public:
     static inline WaveSpectrum fromRGB(Spectrum color, bool is_reflectance = true);
 
     static void Init() {
+        interval = (Real(wavelength_end) - wavelength_beg) / nSpectralSamples;
         // Compute XYZ matching functions for _SampledSpectrum_
         for (int i = 0; i < nSpectralSamples; ++i) {
             Real wl0 = Lerp(Real(i) / Real(nSpectralSamples),
@@ -278,6 +281,8 @@ public:
             rgbIllum2SpectBlue.c[i] =
                 AverageSpectrumSamples(RGB2SpectLambda, RGBIllum2SpectBlue,
                     nRGB2SpectSamples, wl0, wl1);
+
+            centeral_wavelength[i] = 0.5 * (wavelength_beg + i * interval) + 0.5 * (wavelength_beg + (i + 1) * interval);
         }
     }
     Real operator [](int i) const { return c[i]; }

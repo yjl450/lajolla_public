@@ -2,7 +2,7 @@
 
 <!-- Defaults, these can be set via the command line: -Darg=value -->
 
-	<default name="spp" value="128"/>
+	<default name="spp" value="4096"/>
 	<default name="resx" value="1280"/>
 	<default name="resy" value="720"/>
 
@@ -87,9 +87,10 @@
 		<boolean name="face_normals" value="true"/>
 		<ref id="mat-Material.001" name="bsdf"/>
 	</shape>
-	<shape type="ply">
-		<string name="filename" value="meshes/Plane_001.ply"/>
-		<boolean name="face_normals" value="true"/>
-		<ref id="mat-Material.003" name="bsdf"/>
-	</shape>
+  <shape type="sphere">
+    <point name="center" x="0" y="2.5" z="0"/>
+    <!-- <point name="center" x="10" y="0" z="0"/> -->
+    <float name="radius" value="1"/>
+    <ref id="mat-Material.003" name="bsdf"/>
+  </shape>
 </scene>

@@ -26,6 +26,7 @@ struct eval_op {
     const Vector3 &dir_out;
     const PathVertex &vertex;
     const TexturePool &texture_pool;
+    const bool is_reflectance;
     const TransportDirection &dir;
 };
 
@@ -97,8 +98,9 @@ Spectrum eval(const Material &material,
               const Vector3 &dir_out,
               const PathVertex &vertex,
               const TexturePool &texture_pool,
+              const bool is_reflectance,
               TransportDirection dir) {
-    return std::visit(eval_op{dir_in, dir_out, vertex, texture_pool, dir}, material);
+    return std::visit(eval_op{dir_in, dir_out, vertex, texture_pool, is_reflectance, dir}, material);
 }
 
 std::optional<BSDFSampleRecord>

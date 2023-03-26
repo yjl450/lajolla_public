@@ -99,7 +99,13 @@ struct DisneyBSDF {
 
 
 struct Iridescent {
-    Texture<Spectrum> base_color;
+    Texture<Real> N;
+    Texture<Real> eta;
+    Texture<Real> a;
+    Texture<Real> M;
+    Texture<Real> d;
+    Texture<Real> thick_film;
+    Texture<Real> thick_air;
 };
 
 // To add more materials, first create a struct for the material, then overload the () operators for all the
@@ -134,6 +140,7 @@ Spectrum eval(const Material &material,
               const Vector3 &dir_out,
               const PathVertex &vertex,
               const TexturePool &texture_pool,
+              const bool is_reflectance = true,
               TransportDirection dir = TransportDirection::TO_LIGHT);
 
 struct BSDFSampleRecord {

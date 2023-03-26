@@ -163,18 +163,25 @@ Spectrum path_tracing(const Scene &scene,
                 // Let's compute f (BSDF) next.
                 Vector3 dir_view = -ray.dir;
                 assert(vertex.material_id >= 0);
-                Spectrum f = eval(mat, dir_view, dir_light, vertex, scene.texture_pool);
+                if (std::holds_alternative<Iridescent>(mat)) { // Iridescent material
+                    Spectrum L = emission(light, -dir_light, Real(0), point_on_light, scene);
+                    Spectrum f = eval(mat, dir_view, dir_light, vertex, scene.texture_pool, false);
+                    C1 = G * f * L;
+                }
+                else {
+                    Spectrum f = eval(mat, dir_view, dir_light, vertex, scene.texture_pool);
 
-                // Evaluate the emission
-                // We set the footprint to zero since it is not fully clear how
-                // to set it in this case.
-                // One way is to use a roughness based heuristics, but we have multi-layered BRDFs.
-                // See "Real-time Shading with Filtered Importance Sampling" from Colbert et al.
-                // for the roughness based heuristics.
-                Spectrum L = emission(light, -dir_light, Real(0), point_on_light, scene);
+                    // Evaluate the emission
+                    // We set the footprint to zero since it is not fully clear how
+                    // to set it in this case.
+                    // One way is to use a roughness based heuristics, but we have multi-layered BRDFs.
+                    // See "Real-time Shading with Filtered Importance Sampling" from Colbert et al.
+                    // for the roughness based heuristics.
+                    Spectrum L = emission(light, -dir_light, Real(0), point_on_light, scene);
 
-                // C1 is just a product of all of them!
-                C1 = G * f * L;
+                    // C1 is just a product of all of them!
+                    C1 = G * f * L;
+                }
             
                 // Next let's compute w1
 

@@ -43,7 +43,7 @@ Spectrum eval_op::operator()(const DisneyBSDF& bsdf) const {
     if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_out, vertex.geometric_normal) >= 0)
     {
         struct DisneyDiffuse diff = { bsdf.base_color, bsdf.roughness, bsdf.subsurface };
-        f_diffuse = eval_op{ dir_in, dir_out,vertex,texture_pool,dir }(diff);
+        f_diffuse = eval_op{ dir_in, dir_out,vertex,texture_pool, false, dir}(diff);
     }
 #endif // DIFFUSE
 
@@ -51,7 +51,7 @@ Spectrum eval_op::operator()(const DisneyBSDF& bsdf) const {
     if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_out, vertex.geometric_normal) >= 0)
     {
         struct DisneySheen she = { bsdf.base_color, bsdf.sheen_tint };
-        f_sheen = eval_op{ dir_in, dir_out,vertex,texture_pool,dir }(she);
+        f_sheen = eval_op{ dir_in, dir_out,vertex,texture_pool, false, dir }(she);
 
     }
 #endif // SHEEN
@@ -89,13 +89,13 @@ Spectrum eval_op::operator()(const DisneyBSDF& bsdf) const {
     if (dot(dir_in, vertex.geometric_normal) > 0 && dot(dir_out, vertex.geometric_normal) >= 0)
     {
         struct DisneyClearcoat cc = { bsdf.clearcoat_gloss };
-        f_clearcoat = eval_op{ dir_in, dir_out,vertex,texture_pool,dir }(cc);
+        f_clearcoat = eval_op{ dir_in, dir_out,vertex,texture_pool, false, dir }(cc);
     }
 #endif // CLEARCOAT
 
 #ifdef GLASS
     struct DisneyGlass glass = { bsdf.base_color, bsdf.roughness, bsdf.anisotropic, bsdf.eta };
-    f_glass = eval_op{ dir_in, dir_out,vertex,texture_pool,dir }(glass);
+    f_glass = eval_op{ dir_in, dir_out,vertex,texture_pool, false, dir }(glass);
 #endif // GLASS
 
     f_disney += (1 - specular_transmission) * (1 - metallic) * f_diffuse;
